@@ -369,9 +369,8 @@ package XTrenchAlt
 	
 	function serverCmdUnUseTool(%cl)
 	{
-		if(!$TrenchDig::noColorPick)
+		if(!$TrenchDig::noColorPick && isObject(%pl = %cl.Player))
 		{
-			%pl = %cl.Player;
 			if(%pl.getMountedImage(0) == nameToID(TrenchDirtImage) && !%pl.dirtDismount)
 			{
 				%pl.dirtDismountSchedule = schedule(60, %cl, serverCmdUnUseTool, %cl);
