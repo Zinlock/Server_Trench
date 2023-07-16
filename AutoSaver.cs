@@ -33,9 +33,16 @@ package AutoTrenchSave
 
 		if(isFile(%path))
 		{
-			XTrenchSaveLoop(%path, 0);
+			$XTrenchNextUp = %path;
 			messageAll('', "<color:FFFFFF>[<spush>\c0!<spop>] Loading trench map...");
 		}
+	}
+
+	function ServerLoadSaveFile_End()
+	{
+		Parent::ServerLoadSaveFile_End();
+
+		XTrenchLoadMap($XTrenchNextUp);
 	}
 };
 activatePackage(AutoTrenchSave);

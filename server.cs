@@ -17,7 +17,7 @@ if(isFunction(RTB_registerPref))
 {
 	RTB_registerPref("Default Dirt","Trench Digging - Limits","TrenchDig::dirtDefault","int 0 100000","Gamemode_TrenchDigging",50,0,0);
 	RTB_registerPref("Max Dirt","Trench Digging - Limits","TrenchDig::dirtCount","int 0 100000","Gamemode_TrenchDigging",200,0,0);
-	RTB_registerPref("Explosive Radius Multiplier","Trench Digging - Limits","TrenchDig::explosivePower","int 0 1000","Gamemode_TrenchDigging",1,0,0);
+	RTB_registerPref("Explosive Radius Multiplier","Trench Digging - Limits","TrenchDig::explosivePower","num 0 1000","Gamemode_TrenchDigging",1,0,0);
 	RTB_registerPref("Direct Damage To Break","Trench Digging - Limits","TrenchDig::directPower","int 0 1000","Gamemode_TrenchDigging",70,0,0);
 	RTB_registerPref("Disable Floating Bricks","Trench Digging - Features","TrenchDig::gravityCheck","bool","Gamemode_TrenchDigging",0,0,0);
 	RTB_registerPref("Disable Dump Dirt","Trench Digging - Features","TrenchDig::noDumpDirt","bool","Gamemode_TrenchDigging",0,0,0);
@@ -74,13 +74,18 @@ function XTR(%p)
 function newXTrenchGroup()
 {
 	if (!isObject(BrickGroup_998877))	
-		new SimGroup(BrickGroup_998877 : BrickGroup_888888);
-
-	if(!mainBrickGroup.isMember(BrickGroup_998877))
-		mainBrickGroup.add(BrickGroup_998877);
-	BrickGroup_998877.bl_id = 998877;
-	BrickGroup_998877.isPublicDomain = 1;
-	BrickGroup_998877.name = "Trench";
+	{
+		%brickGroup = new SimGroup(BrickGroup_998877);
+		%brickGroup.bl_id = 998877;
+		%brickGroup.name = "\c1Trench\c0";
+		%brickGroup.QuotaObject = GlobalQuota;
+		%brickGroup.DoNotDelete = 1;
+		%brickGroup.isAdmin = 1;
+		%brickGroup.isSuperAdmin = 1;
+		%brickGroup.isPublicDomain = 1;
+		%brickGroup.client = %brickGroup;
+		mainBrickGroup.add(%brickGroup);
+	}
 
 	if(!isObject(XTrenchDestroyedSet)) new SimSet(XTrenchDestroyedSet); // contains all partially destroyed dirt bricks
 	if(!isObject(XTrenchReplaceSet)) new SimSet(XTrenchReplaceSet); // contains script objects with info on the dirt bricks to replace after reset
@@ -100,7 +105,7 @@ function xtConvertFrom(%blid)
 		{
 			%brk = %group.getObject(%i);
 			%db = %brk.getDatablock();
-			
+
 			if(isObject(%ndb = strReplace(%db.getName(), "CubeData", "CubeDirtData")) && %ndb.isTrenchDirt)
 			{
 				%col = %brk.getColorID();
@@ -195,16 +200,41 @@ function XTrenchOptimize()
 	xtOptimize();
 }
 
-function XTrenchClearDirt()
+$xtMaxDestroy = 512;
+
+function XTrenchClearDirt(%destroyed, %callback, %a0, %a1, %a2, %a3)
 {
+	cancel($XTCD);
+
+	%max = $xtMaxDestroy;
+	%des = 0;
+
+	%done = true;
+
 	%ct = BrickGroup_998877.getCount();
+
 	for(%i = 0; %i < %ct; %i++)
 	{
-		%brk = BrickGroup_998877.getObject(%i);
-		%brk.schedule(%i, delete);
+		if(%des >= %max || %i >= BrickGroup_998877.getCount())
+			break;
+
+		%dbr = BrickGroup_998877.getObject(%i);
+
+		if(!%destroyed || XTrenchDestroyedSet.isMember(%dbr))
+		{
+			%dbr.delete();
+			%des++;
+			%done = false;
+		}
 	}
 
-	messageAll('', "<color:888888>Clearing <spush><color:44FF44>" @ %ct @ "<spop> Trench brick" @ (%ct != 1 ? "s" : ""));
+	if(%done || BrickGroup_998877.getCount() <= 0)
+	{
+		call(%callback, %a0, %a1, %a2, %a3);
+		return;
+	}
+
+	$XTCD = schedule(0, BrickGroup_998877, XTrenchClearDirt, %destroyed, %callback, %a0, %a1, %a2, %a3);
 }
 
 function XTrenchResetDirt()
@@ -221,17 +251,7 @@ function XTrenchResetDirt()
 			XTemp.Ready[%brk.getPosition()] = true;
 	}
 
-	%ct = XTrenchDestroyedSet.getCount();
-	for(%i = 0; %i < %ct; %i++)
-	{
-		%dbr = XTrenchDestroyedSet.getObject(%i);
-		XTemp.Cleared[%dbr.position] = true;
-		%dbr.schedule(%i * 0.5, delete);
-	}
-
-	messageAll('', "<color:888888>Clearing <spush><color:44FF44>" @ %ct @ "<spop> Trench brick" @ (%ct != 1 ? "s" : ""));
-
-	schedule(%ct + 300, 0, XTrenchResetDirtEnd);
+	XTrenchClearDirt(true, XTrenchResetDirtEnd);
 }
 
 function XTrenchResetDirtEnd()
@@ -282,22 +302,34 @@ function XTrenchResetDirtEnd()
 	$XTActive = $xtx;
 }
 
-function XTrenchClearResetList()
+function XTrenchClearResetList(%callback, %a0, %a1, %a2, %a3)
 {
+	cancel($XTCS);
+
+	%max = $xtMaxDestroy;
+
 	%ct = XTrenchReplaceSet.getCount();
+
 	for(%i = 0; %i < %ct; %i++)
 	{
+		if(%i >= %max || %i >= XTrenchReplaceSet.getCount())
+			break;
+
 		%dbr = XTrenchReplaceSet.getObject(%i);
-		%dbr.schedule(0, delete);
+		%dbr.delete();
 	}
 
-	messageAll('', "<color:888888>Clearing <spush><color:44FF44>" @ %ct @ "<spop> Trench reset object" @ (%ct != 1 ? "s" : ""));
+	if(XTrenchReplaceSet.getCount() <= 0)
+	{
+		call(%callback, %a0, %a1, %a2, %a3);
+		return;
+	}
+
+	$XTCS = schedule(0, XTrenchReplaceSet, XTrenchClearResetList, %callback, %a0, %a1, %a2, %a3);
 }
 
 function XTrenchRebuildResetList(%full)
 {
-	XTrenchClearResetList();
-
 	%cts = 0;
 
 	for(%i = 0; %i < BrickGroup_998877.getCount(); %i++)
@@ -323,9 +355,14 @@ function XTrenchRebuildResetList(%full)
 
 function XTDirtPlant(%brk)
 {
+	// todo!!! fix this running while a save is loading, causing extra reset objects to spawn
+
+	if(isObject($Server_LoadFileObj))
+		return;
+
 	if(!isObject(%brk) || !%brk.getDatablock().isTrenchDirt || !%brk.isPlanted)
 		return;
-	
+
 	if(%brk.getName() $= "XTD")
 		XTrenchDestroyedSet.add(%brk);
 
@@ -358,15 +395,23 @@ function XTrenchExportMap(%path)
 {
 	%file = new FileObject();
 	if(!%file.openForWrite(%path))
+	{
+		%file.close();
+		%file.delete();
 		return 0;
+	}
 	
 	newXTrenchGroup();
 
 	%ct = XTrenchReplaceSet.getCount();
 	if(%ct <= 0)
-		return -1;
+	{
+		%file.close();
+		%file.delete();
+		return 0;
+	}
 	
-	$XTrench_loadStart = getSimTime();
+	$XTrench_loadStart = getRealTime();
 
 	messageAll('', "<color:888888>Exporting Trench map as <spush><color:44FF44>" @ fileName(%path));
 
@@ -386,7 +431,7 @@ function XTrenchExportMap(%path)
 	%file.close();
 	%file.delete();
 
-	messageAll('', "<color:888888>Trench map exported in <spush><color:44FF44>" @ mFloatLength((getSimTime() - $XTrench_loadStart) / 1000, 1) @ " seconds<spop>.");
+	messageAll('', "<color:888888>Trench map exported in <spush><color:44FF44>" @ mFloatLength((getRealTime() - $XTrench_loadStart) / 1000, 1) @ " seconds<spop>.");
 
 	$XTrench_loadStart = "";
 
@@ -397,26 +442,31 @@ function XTrenchLoadMap(%path)
 {
 	%file = new FileObject();
 	if(!%file.openForRead(%path))
+	{
+		%file.close();
+		%file.delete();
 		return 0;
+	}
 
 	newXTrenchGroup();
 
 	%ct = %file.readLine() * 1;
 	if(%ct <= 0)
-		return -1;
+	{
+		%file.close();
+		%file.delete();
+		return 0;
+	}
 	
-	$XTrench_loadStart = getSimTime();
+	$XTrench_loadStart = getRealTime();
 	
 	messageAll('', "<color:888888>Loading Trench map from <spush><color:44FF44>" @ fileName(%path));
 
-	for(%i = 0; %i < XTrenchReplaceSet.getCount(); %i++)
-	{
-		%dbr = XTrenchReplaceSet.getObject(%i);
-		%dbr.schedule(0, delete);
-	}
+	XTrenchClearResetList(XTrenchLoadMapP2, %file, %path, %ct);
+}
 
-	messageAll('', "<color:888888>Cleared <spush><color:44FF44>" @ %i @ "<spop> Trench reset object" @ (%i != 1 ? "s" : ""));
-
+function XTrenchLoadMapP2(%file, %path, %ct)
+{
 	while(!%file.isEOF())
 	{
 		%str = %file.readLine();
@@ -450,11 +500,9 @@ function XTrenchLoadMap(%path)
 	%file.close();
 	%file.delete();
 
-	messageAll('', "<color:888888>Trench map loaded in <spush><color:44FF44>" @ mFloatLength((getSimTime() - $XTrench_loadStart) / 1000, 1) @ " seconds<spop>.");
+	messageAll('', "<color:888888>Trench map loaded in <spush><color:44FF44>" @ mFloatLength((getRealTime() - $XTrench_loadStart) / 1000, 1) @ " seconds<spop>.");
 
 	$XTrench_loadStart = "";
-
-	return %ct;
 }
 
 function XTrenchGhostSource(%src)
@@ -529,11 +577,11 @@ function serverCmdXTSaveMap(%cl, %n0, %n1, %n2, %n3, %n4, %n5, %n6, %n7, %n8, %n
 	%ct = XTrenchExportMap("config/server/XTrench/" @ %str @ ".xtd");
 
 	if(%ct == 0)
-		messageClient(%cl, '', "<color:888888><font:arial:15>Failed to write map file...");
+		messageClient(%cl, '', "<color:888888>Failed to write map file...");
 	else if(%ct == -1)
-		messageClient(%cl, '', "<color:888888><font:arial:15>No trench rebuild points to save...");
+		messageClient(%cl, '', "<color:888888>No trench rebuild points to save...");
 	// else if(%ct > 0)
-	// 	messageClient(%cl, '', "<color:888888><font:arial:15>Saving trench map as <color:44ff44>" @ %str);
+	// 	messageClient(%cl, '', "<color:888888>Saving trench map as <color:44ff44>" @ %str);
 }
 
 function serverCmdXTLoadMap(%cl, %n0, %n1, %n2, %n3, %n4, %n5, %n6, %n7, %n8, %n9)
@@ -550,11 +598,11 @@ function serverCmdXTLoadMap(%cl, %n0, %n1, %n2, %n3, %n4, %n5, %n6, %n7, %n8, %n
 	%ct = XTrenchLoadMap("config/server/XTrench/" @ %str @ ".xtd");
 	
 	if(%ct == 0)
-		messageClient(%cl, '', "<color:888888><font:arial:15>Failed to read map file...");
+		messageClient(%cl, '', "<color:888888>Failed to read map file...");
 	else if(%ct == -1)
-		messageClient(%cl, '', "<color:888888><font:arial:15>No trench rebuild points to load...");
+		messageClient(%cl, '', "<color:888888>No trench rebuild points to load...");
 	// else if(%ct > 0)
-	// 	messageClient(%cl, '', "<color:888888><font:arial:15>Loading trench map <color:44ff44>" @ %str);
+	// 	messageClient(%cl, '', "<color:888888>Loading trench map <color:44ff44>" @ %str);
 }
 
 function serverCmdXTClearDirt(%cl)
@@ -562,7 +610,7 @@ function serverCmdXTClearDirt(%cl)
 	if(!%cl.isSuperAdmin)
 		return;
 	
-	//messageClient(%cl, '', "<color:888888><font:arial:15>Clearing trench dirt");
+	messageClient(%cl, '', "<color:888888>Clearing trench dirt");
 	XTrenchClearDirt();
 }
 
@@ -571,7 +619,7 @@ function serverCmdXTRebuildDirt(%cl)
 	if(!%cl.isSuperAdmin)
 		return;
 	
-	//messageClient(%cl, '', "<color:888888><font:arial:15>Resetting trench dirt");
+	//messageClient(%cl, '', "<color:888888>Resetting trench dirt");
 	XTrenchResetDirt();
 }
 
@@ -580,7 +628,7 @@ function serverCmdXTClearSource(%cl)
 	if(!%cl.isSuperAdmin)
 		return;
 	
-	//messageClient(%cl, '', "<color:888888><font:arial:15>Clearing trench source");
+	messageClient(%cl, '', "<color:888888>Clearing trench source");
 	XTrenchClearResetList();
 }
 
@@ -589,9 +637,10 @@ function serverCmdXTRebuildSource(%cl)
 	if(!%cl.isSuperAdmin)
 		return;
 	
-	//messageClient(%cl, '', "<color:888888><font:arial:15>Rebuilding trench source");
+	//messageClient(%cl, '', "<color:888888>Rebuilding trench source");
 
-	XTrenchRebuildResetList(0);
+	XTrenchClearResetList(XTrenchRebuildResetList, 0);
+	// XTrenchRebuildResetList(0);
 }
 
 function serverCmdXTRebuildFullSource(%cl)
@@ -599,9 +648,10 @@ function serverCmdXTRebuildFullSource(%cl)
 	if(!%cl.isSuperAdmin)
 		return;
 	
-	//messageClient(%cl, '', "<color:888888><font:arial:15>Rebuilding trench source");
+	//messageClient(%cl, '', "<color:888888>Rebuilding trench source");
 
-	XTrenchRebuildResetList(1);
+	XTrenchClearResetList(XTrenchRebuildResetList, 1);
+	// XTrenchRebuildResetList(1);
 }
 
 function serverCmdXTGhostSource(%cl)
@@ -612,12 +662,12 @@ function serverCmdXTGhostSource(%cl)
 	%ct = XTrenchGhostSet.getCount();
 	if(%ct <= 0)
 	{
-		//messageClient(%cl, '', "<color:888888><font:arial:15>Ghosting trench source");
+		//messageClient(%cl, '', "<color:888888>Ghosting trench source");
 		XTrenchGhostSource(%cl);
 	}
 	else
 	{
-		messageClient(%cl, '', "<color:888888><font:arial:15>Hiding trench source");
+		messageClient(%cl, '', "<color:888888>Hiding trench source");
 		for(%i = 0; %i < %ct; %i++)
 		{
 			%brk = XTrenchGhostSet.getObject(%i);
@@ -675,12 +725,28 @@ package XTrench
 	{
 		Parent::onPlant(%brk);
 
+		if(isObject($Server_LoadFileObj) && %brk.getDataBlock().isTrenchDirt)
+		{
+			newXTrenchGroup();
+
+			BrickGroup_998877.add(%brk);
+			return;
+		}
+
 		schedule(300, %brk, XTDirtPlant, %brk);
 	}
 
 	function fxDtsBrick::onLoadPlant(%brk)
 	{
 		Parent::onLoadPlant(%brk);
+
+		if(isObject($Server_LoadFileObj) && %brk.getDataBlock().isTrenchDirt)
+		{
+			newXTrenchGroup();
+
+			BrickGroup_998877.add(%brk);
+			return;
+		}
 
 		schedule(300, %brk, XTDirtPlant, %brk);
 	}

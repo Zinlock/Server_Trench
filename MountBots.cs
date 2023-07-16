@@ -28,12 +28,15 @@ package mxDismount {
 
 	function Player::setScale(%pl, %scale)
 	{
-		for(%i = 0; %i < mxBotSet.getCount(); %i++)
+		if(isObject(mxBotSet))
 		{
-			%bot = mxBotSet.getObject(%i);
-			if(isObject(%bot) && %bot.sourceObject == %pl)
+			for(%i = 0; %i < mxBotSet.getCount(); %i++)
 			{
-				%bot.setScale(%scale);
+				%bot = mxBotSet.getObject(%i);
+				if(isObject(%bot) && %bot.sourceObject == %pl)
+				{
+					%bot.setScale(%scale);
+				}
 			}
 		}
 
