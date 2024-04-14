@@ -75,7 +75,7 @@ function newXTrenchGroup()
 {
 	if (!isObject(BrickGroup_998877))	
 	{
-		%brickGroup = new SimGroup(BrickGroup_998877);
+		%brickGroup = new ScriptGroup(BrickGroup_998877);
 		%brickGroup.bl_id = 998877;
 		%brickGroup.name = "\c1Trench\c0";
 		%brickGroup.QuotaObject = GlobalQuota;
@@ -83,7 +83,6 @@ function newXTrenchGroup()
 		%brickGroup.isAdmin = 1;
 		%brickGroup.isSuperAdmin = 1;
 		%brickGroup.isPublicDomain = 1;
-		%brickGroup.client = %brickGroup;
 		mainBrickGroup.add(%brickGroup);
 	}
 
