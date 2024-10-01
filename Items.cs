@@ -260,8 +260,8 @@ function TrenchDirtImage::onMount(%this, %obj, %slot)
 
 	if(isObject(%bot = %obj.mountMXBot(0)))
 	{
-		%obj.trenchBot.source = %bot;
 		%obj.trenchBot = %bot.mountMXBot(0, TrenchBlockAI);
+		%obj.trenchBot.source = %bot;
 	}
 
 	%obj.client.updateDirt();
@@ -273,12 +273,14 @@ function TrenchDirtImage::onUnMount(%this, %obj, %slot)
 
 	if(!$TrenchDig::noColorPick)
 		commandToClient(%obj.client, 'SetPaintingDisabled', (isObject(%mg = %obj.Client.Minigame) && !%mg.EnablePainting));
-	
-	if(isObject(%bot = %obj.trenchBot.source))
-		%bot.delete();
 
 	if(isObject(%bot = %obj.trenchBot))
+	{
+		if(isObject(%bot2 = %bot.source))
+			%bot2.delete();
+
 		%bot.delete();
+	}
 }
 
 function TrenchShovelImage::onPreFire(%this, %obj, %slot)
